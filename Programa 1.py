@@ -70,6 +70,7 @@ class ProcesamientoPorLotes:
         self.procesos_en_espera = []
         self.procesos_en_ejecucion = []
         self.procesos_terminados = []
+        self.procesos_archivar = []
         self.tiempo_transcurrido = 0
         self.numero_lotes = 0  # Variable para contar el número de lotes
         self.lote_actual = 0  # Variable para rastrear el lote actual
@@ -85,7 +86,7 @@ class ProcesamientoPorLotes:
         self.actualizar_tiempo()
 
         #Lectura completa del archivo lógico
-        datos = open('datos.txt')
+        datos = open('programadores.txt')
         self.programadores = datos.readlines()
 
         #Se obtiene y se valida la cantidad de procesos a ejecutar
@@ -98,6 +99,16 @@ class ProcesamientoPorLotes:
             #arroja mensaje de error y detiene el reloj
             self.enEspera.insert(tk.END, f"Ingrese una cantidad numérica...\n")
             self.start = 0
+
+        #Se nombra el archivo donde se almacenarán los procesos terminados
+        self.archivoDatos = "datos.txt"
+
+
+        #Inicializa el contador dependiendo el número de procesos que se ejecuten
+        if procesos < 5:
+            self.procesos_por_lote = procesos
+        else:
+            self.procesos_por_lote = 5
 
         #Calcula el total de lotes redondeando hacia arriba
         lotes = math.ceil(procesos / 5)
@@ -134,8 +145,9 @@ class ProcesamientoPorLotes:
                 #Obtenemos el resultado de la operación correctamente planteada
                 resultado = eval(operacion)
 
+
             #Diccionario con los datos del proceso a ejecutar
-            proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual}
+            proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual, "tme_no_modificado": tme}
             self.procesos_en_espera.append(proceso)
 
         datos.close()
@@ -143,10 +155,22 @@ class ProcesamientoPorLotes:
         self.ejecutar_procesos()
 
     def ejecutar_procesos(self):
+        #Validación para saber el estado del lote
+        if self.procesos_por_lote > 1:
+            #mientras se encuentre en el mismo lote se decrementara el contador
+            self.procesos_por_lote -= 1
+        else:
+            #De lo contrario se valida si hay más lotes verificando que la cuenta de procesos en espera sea mayor a 5
+            self.procesos_por_lote = len(self.procesos_en_espera)-1 
+            if self.procesos_por_lote > 5:
+                #Si es válido, se toma un lote completo para iniciar el contador
+                self.procesos_por_lote = 5
+            
         #Verifica si hay procesos en espera
         if self.procesos_en_espera:
             #Toma el proceso en posición cero y lo guardamos en la variable
             proceso_actual = self.procesos_en_espera.pop(0)
+            self.procesos_archivar.append(proceso_actual)
             #Limpia el área de espera
             self.enEspera.delete(1.0, tk.END)
 
@@ -156,10 +180,11 @@ class ProcesamientoPorLotes:
                 self.enEspera.insert(tk.END, f"{proceso_actual['id']+1}. {proceso_anterior['programador']} {proceso_anterior['a']} {proceso_anterior['operador']} {proceso_anterior['b']}\n")
             
             #Agregamos la cantidad de procesos pendientes contando con el método len()
-            self.enEspera.insert(tk.END, f"{len(self.procesos_en_espera)} procesos pendientes")
+            self.enEspera.insert(tk.END, f"{self.procesos_por_lote} procesos pendientes")
 
             #Limpiamos el área de ejecución
             self.enEjecucion.delete(1.0, tk.END)
+
 
             #Verificar si el proceso actual pertenece a un lote diferente al anterior
             if proceso_actual['lote'] != self.lote_actual:
@@ -170,6 +195,7 @@ class ProcesamientoPorLotes:
                 #Se resta uno al número de lotes pendientes 
                 if self.numero_lotes != 0:
                     self.numero_lotes -= 1
+
 
             #Insertamos en ejecución el proceso que tomamos al inicio y luego se inserta en el área correspondiente
             proceso_text = f"{proceso_actual['id']}. {proceso_actual['programador']} {proceso_actual['a']} {proceso_actual['operador']} {proceso_actual['b']}\nTME: {proceso_actual['tme']}"
@@ -207,30 +233,60 @@ class ProcesamientoPorLotes:
             #Llamamos a la función que toma un nuevo proceso o termina la ejecución
             self.ejecutar_procesos()
 
+    def obtenerDatos(self):
+        
+        #Abrir el archivo en modo de anexar ('a') para agregar resultados
+        with open(self.archivoDatos, 'a') as file:
+            #Conjunto para realizar un seguimiento de los lotes ya procesados
+            lotes_procesados = set()
+
+            #Iterar sobre los procesos terminados
+            for proceso in self.procesos_archivar:
+                lote = proceso['lote']
+
+                #Verificar si el lote ya ha sido procesado
+                if lote not in lotes_procesados:
+                    #Escribir el encabezado del lote en el archivo
+                    file.write(f"Lote {lote}\n")
+                    #Agregar el lote al conjunto de lotes procesados
+                    lotes_procesados.add(lote)
+
+                #Escribir en el archivo información sobre el proceso actual
+                file.write(f"{proceso['id']}. {proceso['programador'].strip()}\n")
+                file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']}\n")
+                file.write(f"TME: {proceso['tme_no_modificado']}\n\n")
 
     def obtenerResultados(self):
+        self.obtenerDatos()
         #Se nombra el archivo donde se almacenarán los procesos terminados
         archivo = "Resultados.txt"
 
+        #Abrir el archivo en modo de anexar ('a') para agregar resultados
         with open(archivo, 'a') as file:
+            #Conjunto para realizar un seguimiento de los lotes ya procesados
             lotes_procesados = set()
 
+            #Iterar sobre los procesos terminados
             for proceso in self.procesos_terminados:
                 lote = proceso['lote']
 
-                # Check if the batch has already been processed
+                #Verificar si el lote ya ha sido procesado
                 if lote not in lotes_procesados:
+                    #Escribir el encabezado del lote en el archivo
                     file.write(f"Lote {lote}\n")
+                    #Agregar el lote al conjunto de lotes procesados
                     lotes_procesados.add(lote)
 
+                #Escribir en el archivo información sobre el proceso actual
                 file.write(f"{proceso['id']}. {proceso['programador'].strip()}\n")
                 file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']} = {proceso['resultado']}\n\n")
 
-        #Habilitamos la entrada para evitar una doble simulación
+        # Habilitar la entrada para evitar una doble simulación
         self.entradaProcesos.config(state='normal')
 
+        # Limpiar los listados y variables y el área de procesos terminados
         self.clear()
-        self.terminados.delete(1.0, tk.END)    
+        self.terminados.delete(1.0, tk.END)
 
 
   
