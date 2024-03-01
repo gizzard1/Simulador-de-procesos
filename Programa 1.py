@@ -131,6 +131,16 @@ class ProcesamientoPorLotes:
         else:
             self.procesos_por_lote = 5
 
+        #Se nombra el archivo donde se almacenarán los procesos terminados
+        self.archivoDatos = "datos.txt"
+
+
+        #Inicializa el contador dependiendo el número de procesos que se ejecuten
+        if procesos < 5:
+            self.procesos_por_lote = procesos
+        else:
+            self.procesos_por_lote = 5
+
         #Calcula el total de lotes redondeando hacia arriba
         lotes = math.ceil(procesos / 5)
 
@@ -166,8 +176,13 @@ class ProcesamientoPorLotes:
                 #Obtenemos el resultado de la operación correctamente planteada
                 resultado = eval(operacion)
 
+
             #Diccionario con los datos del proceso a ejecutar
+<<<<<<< HEAD
             proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual, "tiempo_transcurrido":0,"tme_no_modificado": tme,"interrupcion":0}
+=======
+            proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual, "tme_no_modificado": tme}
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
             self.procesos_en_espera.append(proceso)
 
         datos.close()
@@ -175,9 +190,30 @@ class ProcesamientoPorLotes:
         self.ejecutar_procesos()
 
     def ejecutar_procesos(self):
+<<<<<<< HEAD
         self.huboInterrupcion = False
         #Contabilizamos el número de procesos interrumpidos
         procesosInterrumpidos = len(self.procesos_interrumpidos)
+=======
+        #Validación para saber el estado del lote
+        if self.procesos_por_lote > 1:
+            #mientras se encuentre en el mismo lote se decrementara el contador
+            self.procesos_por_lote -= 1
+        else:
+            #De lo contrario se valida si hay más lotes verificando que la cuenta de procesos en espera sea mayor a 5
+            self.procesos_por_lote = len(self.procesos_en_espera)-1 
+            if self.procesos_por_lote > 5:
+                #Si es válido, se toma un lote completo para iniciar el contador
+                self.procesos_por_lote = 5
+            
+        #Verifica si hay procesos en espera
+        if self.procesos_en_espera:
+            #Toma el proceso en posición cero y lo guardamos en la variable
+            proceso_actual = self.procesos_en_espera.pop(0)
+            self.procesos_archivar.append(proceso_actual)
+            #Limpia el área de espera
+            self.enEspera.delete(1.0, tk.END)
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
 
         #Validación para saber el estado del lote. Cambio: validar que haya un proceso interrumpido
         if self.procesos_por_lote > 0 or self.procesos_interrumpidos:
@@ -190,6 +226,7 @@ class ProcesamientoPorLotes:
                 #Si es válido, se toma un lote completo para iniciar el contador
                 self.procesos_por_lote = 4
             
+<<<<<<< HEAD
         #Verifica si hay procesos en espera
         if self.procesos_en_espera or self.procesos_interrumpidos:
             
@@ -204,6 +241,11 @@ class ProcesamientoPorLotes:
             self.procesos_archivar.append(self.proceso_actual)
             #Limpia el área de espera
             self.enEspera.delete(1.0, tk.END)   
+=======
+            #Agregamos la cantidad de procesos pendientes contando con el método len()
+            self.enEspera.insert(tk.END, f"{self.procesos_por_lote} procesos pendientes")
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
+
 
 
             #Verificar si el proceso actual pertenece a un lote diferente al anterior
@@ -217,6 +259,7 @@ class ProcesamientoPorLotes:
                 if self.numero_lotes != 0:
                     self.numero_lotes -= 1
 
+<<<<<<< HEAD
             if self.procesos_en_espera:
                 #Definimos el proceso que se encuentra en la posición final y lo insertamos en el área de espera
                 proceso_anterior = self.procesos_en_espera[-1]
@@ -227,6 +270,8 @@ class ProcesamientoPorLotes:
 
             #Limpiamos el área de ejecución
             self.enEjecucion.delete(1.0, tk.END)
+=======
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
 
             #Insertamos en ejecución el proceso que tomamos al inicio y luego se inserta en el área correspondiente
             proceso_text = f"{self.proceso_actual['id']}. {self.proceso_actual['programador']} {self.proceso_actual['a']} {self.proceso_actual['operador']} {self.proceso_actual['b']}\nTME: {self.proceso_actual['tme']}\nEjecución: {self.proceso_actual['tiempo_transcurrido']}"
@@ -302,9 +347,15 @@ class ProcesamientoPorLotes:
         with open(archivo, 'a') as file:
             #Conjunto para realizar un seguimiento de los lotes ya procesados
             lotes_procesados = set()
+<<<<<<< HEAD
             
             #Iterar sobre los procesos terminados
             for proceso in self.procesos_archivar:
+=======
+
+            #Iterar sobre los procesos terminados
+            for proceso in self.procesos_terminados:
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
                 lote = proceso['lote']
 
                 #Verificar si el lote ya ha sido procesado
@@ -317,12 +368,15 @@ class ProcesamientoPorLotes:
                 #Escribir en el archivo información sobre el proceso actual
                 file.write(f"{proceso['id']}. {proceso['programador'].strip()}\n")
 
+<<<<<<< HEAD
                 if proceso['interrupcion'] == 0:
                     file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']} = {proceso['resultado']}\n\n")
                 elif proceso['interrupcion'] == 1:
                     file.write(f"ERROR\n\n")
 
 
+=======
+>>>>>>> 27a4c3b65384c8791373623bb64aa71590778f15
         # Habilitar la entrada para evitar una doble simulación
         self.entradaProcesos.config(state='normal')
 
