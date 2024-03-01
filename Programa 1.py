@@ -2,7 +2,6 @@ import tkinter as tk
 import time
 import random
 import math
-
 #Definimos la clase para la aplicación
 class ProcesamientoPorLotes:
     #Self es el objeto que contiene todo lo relacionado al procesamiento
@@ -63,16 +62,33 @@ class ProcesamientoPorLotes:
         self.botonObtenerResultados = tk.Button(master, text="OBTENER RESULTADOS", command=self.obtenerResultados, font=font_style)
         self.botonObtenerResultados.grid(row=3, column=4, pady=10)
 
+        #Cambio: botón para interrupción por E/S
+        self.botonInterrupcionES = tk.Button(master, text="Interrupción", command=lambda: self.interrupcionError(2), font=font_style)
+        self.botonInterrupcionES.grid(row=3, column=6, pady=1,sticky="w")
+
+        #Cambio: botón para interrupción por Error 
+        self.botonInterrupcionError = tk.Button(master, text="Error", command=lambda: self.interrupcionError(1), font=font_style)
+        self.botonInterrupcionError.grid(row=3, column=5, pady=10)
+
         self.clear()
 
     def clear(self):        
+        #Cambios: Listado de procesos interrumpidos
+        self.procesos_interrumpidos = []
+
         #Definición de las listas que contendrán los procesos por etapa
         self.procesos_en_espera = []
         self.procesos_en_ejecucion = []
         self.procesos_terminados = []
+        self.procesos_archivar = []
         self.tiempo_transcurrido = 0
         self.numero_lotes = 0  # Variable para contar el número de lotes
         self.lote_actual = 0  # Variable para rastrear el lote actual
+
+        #Cambios: bandera que indica si hubo interrupcion 
+        self.huboInterrupcion = False
+
+        
 
     def iniciarSimulacion(self):
         #Deshabilitamos el botón de resultados para evitar comportamientos inesperados
@@ -85,19 +101,35 @@ class ProcesamientoPorLotes:
         self.actualizar_tiempo()
 
         #Lectura completa del archivo lógico
-        datos = open('datos.txt')
+        datos = open('programadores.txt')
         self.programadores = datos.readlines()
 
         #Se obtiene y se valida la cantidad de procesos a ejecutar
         entrada_procesos = self.entradaProcesos.get()
         if entrada_procesos.isdigit():
             procesos = int(entrada_procesos)
-            #Deshabilitamos la entrada para evitar una doble simulación
-            self.entradaProcesos.config(state='disabled')
+            #Validación para que el número de lotes sean máximo 5
+            if procesos > 26:
+                #arroja mensaje de error y detiene el reloj
+                self.enEspera.insert(tk.END, f"Número máximo de lotes permitidos 5...\n")
+                procesos=0
+                self.start = 0
+            else:
+                #Deshabilitamos la entrada para evitar una doble simulación
+                self.entradaProcesos.config(state='disabled')
         else:
             #arroja mensaje de error y detiene el reloj
             self.enEspera.insert(tk.END, f"Ingrese una cantidad numérica...\n")
             self.start = 0
+            
+        #Se nombra el archivo donde se almacenarán los procesos terminados
+        self.archivoDatos = "datos.txt"
+
+        #Inicializa el contador dependiendo el número de procesos que se ejecuten
+        if procesos < 5:
+            self.procesos_por_lote = procesos
+        else:
+            self.procesos_por_lote = 5
 
         #Calcula el total de lotes redondeando hacia arriba
         lotes = math.ceil(procesos / 5)
@@ -122,7 +154,7 @@ class ProcesamientoPorLotes:
             #Obtenemos los datos al azar tanto la operación como el operando, así también el programador y el tme
             a = random.randint(0, 9)
             b = random.randint(0, 9)
-            tme = random.randint(5, 13)
+            tme = random.randint(5, 10)
             operador = random.choice(['+', '-', '*', '/'])
             programador = random.choice(self.programadores)
             operacion = f"{a} {operador} {b}"
@@ -135,7 +167,7 @@ class ProcesamientoPorLotes:
                 resultado = eval(operacion)
 
             #Diccionario con los datos del proceso a ejecutar
-            proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual}
+            proceso = {"id": i + 1, "programador": programador, "a": a, "operador": operador, "b": b, "tme": tme, "resultado": resultado, "lote": lote_actual, "tiempo_transcurrido":0,"tme_no_modificado": tme,"interrupcion":0}
             self.procesos_en_espera.append(proceso)
 
         datos.close()
@@ -143,40 +175,65 @@ class ProcesamientoPorLotes:
         self.ejecutar_procesos()
 
     def ejecutar_procesos(self):
-        #Verifica si hay procesos en espera
-        if self.procesos_en_espera:
-            #Toma el proceso en posición cero y lo guardamos en la variable
-            proceso_actual = self.procesos_en_espera.pop(0)
-            #Limpia el área de espera
-            self.enEspera.delete(1.0, tk.END)
+        self.huboInterrupcion = False
+        #Contabilizamos el número de procesos interrumpidos
+        procesosInterrumpidos = len(self.procesos_interrumpidos)
 
-            if self.procesos_en_espera:
-                #Definimos el proceso que se encuentra en la posición final y lo intertamos en el área de espera
-                proceso_anterior = self.procesos_en_espera[-1]
-                self.enEspera.insert(tk.END, f"{proceso_actual['id']+1}. {proceso_anterior['programador']} {proceso_anterior['a']} {proceso_anterior['operador']} {proceso_anterior['b']}\n")
+        #Validación para saber el estado del lote. Cambio: validar que haya un proceso interrumpido
+        if self.procesos_por_lote > 0 or self.procesos_interrumpidos:
+            #mientras se encuentre en el mismo lote se decrementara el contador
+            self.procesos_por_lote -= 1
+        else:
+            #De lo contrario se valida si hay más lotes verificando que la cuenta de procesos en espera sea mayor a 5
+            self.procesos_por_lote = len(self.procesos_en_espera)-1 
+            if self.procesos_por_lote > 5:
+                #Si es válido, se toma un lote completo para iniciar el contador
+                self.procesos_por_lote = 4
             
-            #Agregamos la cantidad de procesos pendientes contando con el método len()
-            self.enEspera.insert(tk.END, f"{len(self.procesos_en_espera)} procesos pendientes")
+        #Verifica si hay procesos en espera
+        if self.procesos_en_espera or self.procesos_interrumpidos:
+            
+            #Cambio: valida que haya procesos interrumpidos por E/S antes de cambiar de lote
+            if self.procesos_interrumpidos and self.procesos_por_lote == procesosInterrumpidos-1:
+                #Se inserta en la pila de espera el proceso 
+                self.procesos_en_espera.insert(0, self.procesos_interrumpidos.pop(0))
+                self.ejecutar_procesos
+                
+            #Toma el proceso en posición cero y lo guardamos en la variable
+            self.proceso_actual = self.procesos_en_espera.pop(0)
+            self.procesos_archivar.append(self.proceso_actual)
+            #Limpia el área de espera
+            self.enEspera.delete(1.0, tk.END)   
 
-            #Limpiamos el área de ejecución
-            self.enEjecucion.delete(1.0, tk.END)
 
             #Verificar si el proceso actual pertenece a un lote diferente al anterior
-            if proceso_actual['lote'] != self.lote_actual:
+            if self.proceso_actual['lote'] != self.lote_actual:
+
                 #Si la validación es cierta, entonces inicia con el número de lote
-                self.lote_actual = proceso_actual['lote']
+                self.lote_actual = self.proceso_actual['lote']
                 self.terminados.insert(tk.END, f"Lote {self.lote_actual}\n")
                 self.lotesPendientes.config(text=f"# de Lotes pendientes: {self.numero_lotes}")
                 #Se resta uno al número de lotes pendientes 
                 if self.numero_lotes != 0:
                     self.numero_lotes -= 1
 
+            if self.procesos_en_espera:
+                #Definimos el proceso que se encuentra en la posición final y lo insertamos en el área de espera
+                proceso_anterior = self.procesos_en_espera[-1]
+                self.enEspera.insert(tk.END, f"{self.proceso_actual['id']+1}. {proceso_anterior['programador']} {proceso_anterior['a']} {proceso_anterior['operador']} {proceso_anterior['b']}\n")
+            
+            #Agregamos la cantidad de procesos pendientes contando con el método len()
+            self.enEspera.insert(tk.END, f"{self.procesos_por_lote} procesos pendientes")
+
+            #Limpiamos el área de ejecución
+            self.enEjecucion.delete(1.0, tk.END)
+
             #Insertamos en ejecución el proceso que tomamos al inicio y luego se inserta en el área correspondiente
-            proceso_text = f"{proceso_actual['id']}. {proceso_actual['programador']} {proceso_actual['a']} {proceso_actual['operador']} {proceso_actual['b']}\nTME: {proceso_actual['tme']}"
+            proceso_text = f"{self.proceso_actual['id']}. {self.proceso_actual['programador']} {self.proceso_actual['a']} {self.proceso_actual['operador']} {self.proceso_actual['b']}\nTME: {self.proceso_actual['tme']}\nEjecución: {self.proceso_actual['tiempo_transcurrido']}"
             self.enEjecucion.insert(tk.END, proceso_text)
-            self.procesos_en_ejecucion.append(proceso_actual)
+            self.procesos_en_ejecucion.append(self.proceso_actual)
             #Función lambda que actualiza el tme del proceso en ejecución cada segundo
-            self.master.after(1000, lambda: self.actualizar_tme(proceso_actual))
+            self.master.after(1000, lambda: self.actualizar_tme())
         else:
             #Sólo actualiza los lotes pendientes y detiene el reloj global
             self.lotesPendientes.config(text=f"# de Lotes pendientes: {self.numero_lotes}")
@@ -185,52 +242,93 @@ class ProcesamientoPorLotes:
             self.botonObtenerResultados.config(state='normal')
 
 
-    def actualizar_tme(self, proceso_actual):
+    def actualizar_tme(self):
+        if self.huboInterrupcion:
+            return
+
         #Decrece el valor del tme
-        proceso_actual['tme'] -= 1
+        self.proceso_actual['tme'] -= 1
         #limpia el área de la etiqueta
         self.enEjecucion.delete(1.0, tk.END)
+        
+        #Cambio: incrementa el contador de tiempo en ejecución
+        self.proceso_actual['tiempo_transcurrido'] +=1
         #Actualiza el proceso con su tme modificado y lo inserta en el área correspondiente
-        proceso_text = f"{proceso_actual['id']}. {proceso_actual['programador']} {proceso_actual['a']} {proceso_actual['operador']} {proceso_actual['b']}\nTME: {proceso_actual['tme']}"
+        proceso_text = f"{self.proceso_actual['id']}. {self.proceso_actual['programador']} {self.proceso_actual['a']} {self.proceso_actual['operador']} {self.proceso_actual['b']}\nTME: {self.proceso_actual['tme']}\nEjecución: {self.proceso_actual['tiempo_transcurrido']}"
         self.enEjecucion.insert(tk.END, proceso_text)
 
         #Esto tiene recursividad si el tme no ha sido reducido a 0
-        if proceso_actual['tme'] > 0:
-            self.master.after(1000, lambda: self.actualizar_tme(proceso_actual))
+        if self.proceso_actual['tme'] > 0:
+            self.master.after(1000, self.actualizar_tme)
         else:
-            #Cualdo es 0 eel proceso pasa a la lista de procesos terminaddos
+            #Cuando es 0 el proceso pasa a la lista de procesos terminaddos
             self.enEjecucion.delete(1.0, tk.END)
-            self.procesos_terminados.append(proceso_actual)
+            self.procesos_terminados.append(self.proceso_actual)
             #Se inserta el proceso en el área de terminados
-            terminado_text = f"\n{proceso_actual['id']}. {proceso_actual['programador']} {proceso_actual['a']} {proceso_actual['operador']} {proceso_actual['b']} = {proceso_actual['resultado']}\n"
+            terminado_text = f"\n{self.proceso_actual['id']}. {self.proceso_actual['programador']} {self.proceso_actual['a']} {self.proceso_actual['operador']} {self.proceso_actual['b']} = {self.proceso_actual['resultado']}\n"
             self.terminados.insert(tk.END, terminado_text)
             #Llamamos a la función que toma un nuevo proceso o termina la ejecución
             self.ejecutar_procesos()
 
+    def obtenerDatos(self):
+        
+        #Abrir el archivo en modo de anexar ('a') para agregar resultados
+        with open(self.archivoDatos, 'a') as file:
+            #Conjunto para realizar un seguimiento de los lotes ya procesados
+            lotes_procesados = set()
+
+            #Iterar sobre los procesos terminados
+            for proceso in self.procesos_archivar:
+                lote = proceso['lote']
+
+                #Verificar si el lote ya ha sido procesado
+                if lote not in lotes_procesados:
+                    #Escribir el encabezado del lote en el archivo
+                    file.write(f"Lote {lote}\n")
+                    #Agregar el lote al conjunto de lotes procesados
+                    lotes_procesados.add(lote)
+
+                #Escribir en el archivo información sobre el proceso actual
+                file.write(f"{proceso['id']}. {proceso['programador'].strip()}\n")
+                file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']}\n")
+                file.write(f"TME: {proceso['tme_no_modificado']}\n\n")
 
     def obtenerResultados(self):
+        self.obtenerDatos()
         #Se nombra el archivo donde se almacenarán los procesos terminados
         archivo = "Resultados.txt"
 
+        #Abrir el archivo en modo de anexar ('a') para agregar resultados
         with open(archivo, 'a') as file:
+            #Conjunto para realizar un seguimiento de los lotes ya procesados
             lotes_procesados = set()
-
-            for proceso in self.procesos_terminados:
+            
+            #Iterar sobre los procesos terminados
+            for proceso in self.procesos_archivar:
                 lote = proceso['lote']
 
-                # Check if the batch has already been processed
+                #Verificar si el lote ya ha sido procesado
                 if lote not in lotes_procesados:
+                    #Escribir el encabezado del lote en el archivo
                     file.write(f"Lote {lote}\n")
+                    #Agregar el lote al conjunto de lotes procesados
                     lotes_procesados.add(lote)
 
+                #Escribir en el archivo información sobre el proceso actual
                 file.write(f"{proceso['id']}. {proceso['programador'].strip()}\n")
-                file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']} = {proceso['resultado']}\n\n")
 
-        #Habilitamos la entrada para evitar una doble simulación
+                if proceso['interrupcion'] == 0:
+                    file.write(f"{proceso['a']} {proceso['operador']} {proceso['b']} = {proceso['resultado']}\n\n")
+                elif proceso['interrupcion'] == 1:
+                    file.write(f"ERROR\n\n")
+
+
+        # Habilitar la entrada para evitar una doble simulación
         self.entradaProcesos.config(state='normal')
 
+        # Limpiar los listados y variables y el área de procesos terminados
         self.clear()
-        self.terminados.delete(1.0, tk.END)    
+        self.terminados.delete(1.0, tk.END)
 
 
   
@@ -243,6 +341,28 @@ class ProcesamientoPorLotes:
             self.relojGlobal.config(text=f"Reloj Global {self.tiempo_transcurrido} segundos")
             #Ejecución recursiva hasta que start sea 0
             self.master.after(1000, self.actualizar_tiempo)
+
+    #Cambio: Función que simula la interrupción E/S
+    def interrupcionError(self,tipoError):
+        self.huboInterrupcion = True
+        #Forzamos la interrupcion del proceso y guardamos el tipo de interrupcion (1 es por error)
+        self.proceso_actual['interrupcion']=tipoError
+        #Elminamos información gráfica
+        self.enEjecucion.delete(1.0, tk.END)
+        if tipoError == 1:
+            #Se transfiere a procesos terminados
+            self.procesos_terminados.append(self.proceso_actual)
+            terminado_text = f"\n{self.proceso_actual['id']}. {self.proceso_actual['programador']} ERROR\n"
+            self.terminados.insert(tk.END, terminado_text)
+
+        elif tipoError == 2:
+            self.procesos_interrumpidos.append(self.proceso_actual)
+            self.procesos_por_lote+=1
+            self.procesos_archivar.pop(-1)
+                    
+        #Continuamos la ejecución
+        self.master.after(1000,lambda: self.ejecutar_procesos())
+
 
 interfaz = tk.Tk()
 app = ProcesamientoPorLotes(interfaz)
